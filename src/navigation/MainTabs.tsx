@@ -1,15 +1,67 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Animated } from 'react-native';
 import { Colors } from '../theme/colors';
 import ParentHomeScreen from '../screens/parent/ParentHomeScreen';
 import ChildStack from './ChildStack';
 import AnnouncementsScreen from '../screens/parent/AnnouncementsScreen';
 import CalendarScreen from '../screens/parent/CalendarScreen';
 import ProfileScreen from '../screens/parent/ProfileScreen';
+import { createScaleAnimation, ANIMATION_DURATIONS } from '../utils/animations';
 
 const Tab = createBottomTabNavigator();
+
+// Animated Tab Icon Component
+function AnimatedTabIcon({
+  focused,
+  iconName,
+  size = 22,
+  color
+}: {
+  focused: boolean;
+  iconName: keyof typeof Ionicons.glyphMap;
+  size?: number;
+  color: string;
+}) {
+  const scaleAnim = useRef(new Animated.Value(focused ? 1 : 0.8)).current;
+  const bounceAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (focused) {
+      // Scale up and bounce when focused
+      Animated.sequence([
+        createScaleAnimation(scaleAnim, 1.1, ANIMATION_DURATIONS.fast),
+        createScaleAnimation(scaleAnim, 1, ANIMATION_DURATIONS.fast),
+      ]).start();
+
+      // Subtle bounce effect
+      Animated.sequence([
+        createScaleAnimation(bounceAnim, 1.15, ANIMATION_DURATIONS.veryFast),
+        createScaleAnimation(bounceAnim, 1, ANIMATION_DURATIONS.fast),
+      ]).start();
+    } else {
+      // Scale down when unfocused
+      createScaleAnimation(scaleAnim, 0.9, ANIMATION_DURATIONS.fast).start();
+    }
+  }, [focused]);
+
+  return (
+    <Animated.View
+      style={[
+        focused ? styles.activeIconContainer : styles.inactiveIconContainer,
+        {
+          transform: [
+            { scale: scaleAnim },
+            { scale: bounceAnim },
+          ],
+        },
+      ]}
+    >
+      <Ionicons name={iconName} size={size} color={color} />
+    </Animated.View>
+  );
+}
 
 export default function MainTabs() {
   return (
@@ -18,7 +70,7 @@ export default function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textTertiary,
-        tabBarLabelStyle: { 
+        tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
           marginBottom: Platform.OS === 'ios' ? 0 : 8,
@@ -56,9 +108,12 @@ export default function MainTabs() {
           }
 
           return (
-            <View style={focused ? styles.activeIconContainer : undefined}>
-              <Ionicons name={iconName} size={22} color={color} />
-            </View>
+            <AnimatedTabIcon
+              focused={focused}
+              iconName={iconName}
+              size={22}
+              color={color}
+            />
           );
         },
       })}
