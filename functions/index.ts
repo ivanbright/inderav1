@@ -185,3 +185,34 @@ export const getMyClaims = functions.https.onCall(async (_data, context) => {
         status: context.auth.token.status || null,
     };
 });
+
+/**
+ * Admin-only: lists all users awaiting approval, newest first. Returns only the
+ * fields a decision UI needs (no emails for already-active users). This is the
+ * data source for the admin "Review Approvals" list screen.
+ */
+export const getPendingUsers = functions.https.onCall(async (_data, context) => {
+    requireAdmin(context);
+
+    const snapshot = await db
+        .collection('users')
+        .where('status', '==', 'pending_approval')
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get();
+
+    return {
+        users: snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                uid: doc.id,
+                email: data.email || null,
+                role: data.role || 'parent',
+                name: data.displayName || data.firstName
+                    ? `${data.firstName || ''} ${data.lastName || ''}`.trim()
+                    : null,
+                submittedAt: data.createdAt?.toDate?.()?.toISOString() || null,
+            };
+        }),
+    };
+});

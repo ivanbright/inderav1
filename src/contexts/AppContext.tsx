@@ -4,6 +4,7 @@ import { where, orderBy } from 'firebase/firestore';
 import { authService, UserProfile } from '../services/authService';
 import { databaseService } from '../services/databaseService';
 import { initializationService } from '../services/initializationService';
+import { offlineService } from '../services/offlineService';
 import { Student, Parent, Teacher, Notification, Announcement } from '../services/models';
 
 interface AppContextType {
@@ -102,6 +103,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             setIsLoading(true);
             clearUserData();
 
+            // If offline mode, load mock data
+            if (offlineService.isOffline()) {
+                await loadOfflineData(profile);
+                return;
+            }
+
             switch (profile.role) {
                 case 'parent':
                     await loadParentData(profile);
@@ -123,6 +130,55 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             setError(error.message || 'Failed to load user data');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const loadOfflineData = async (profile: UserProfile) => {
+        try {
+            // Load mock data based on role
+            const mockStudents = offlineService.getMockStudents();
+            const mockNotifications = offlineService.getMockNotifications();
+            const mockAnnouncements = offlineService.getMockAnnouncements();
+
+            setStudents(mockStudents);
+            setNotifications(mockNotifications);
+            setAnnouncements(mockAnnouncements);
+
+            // Set role-specific mock data
+            if (profile.role === 'parent') {
+                const mockParent = {
+                    id: 'parent-1',
+                    userId: profile.uid,
+                    schoolId: profile.schoolId,
+                    firstName: 'Nomsa',
+                    lastName: 'Mbeki',
+                    email: profile.email,
+                    phone: '+27 82 123 4567',
+                    childrenIds: ['student-1', 'student-2'],
+                    authorizedPickups: offlineService.getMockPickupPersons(),
+                    emergencyContacts: [],
+                    isActive: true,
+                };
+                setParent(mockParent);
+            } else if (profile.role === 'teacher') {
+                const mockTeacher = {
+                    id: 'teacher-1',
+                    userId: profile.uid,
+                    schoolId: profile.schoolId,
+                    employeeId: 'T001',
+                    firstName: 'Sarah',
+                    lastName: 'Johnson',
+                    email: profile.email,
+                    phone: '+27 83 456 7890',
+                    subjects: ['mathematics'],
+                    classIds: ['class-8a'],
+                    isActive: true,
+                };
+                setTeacher(mockTeacher);
+            }
+        } catch (error) {
+            console.error('Error loading offline data:', error);
+            throw error;
         }
     };
 
@@ -251,11 +307,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         try {
             setIsLoading(true);
             setError(null);
-            await authService.signIn(email, password);
+
+            const result = await authService.signIn(email, password);
             // User data will be loaded by the auth state change listener
         } catch (error: any) {
-            setError(error.message || 'Sign in failed');
-            throw error;
+            console.error('Sign-in failed:', error);
+            const errorMessage = error?.message || 'Authentication failed. Please check your credentials and try again.';
+            setError(errorMessage);
         } finally {
             setIsLoading(false);
         }

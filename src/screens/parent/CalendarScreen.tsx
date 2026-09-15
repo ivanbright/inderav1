@@ -1,9 +1,18 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../theme/colors';
 import ScreenHeader from '../../components/ScreenHeader';
 import { useCalendarData } from '../../hooks/useCalendarData';
+import AnimatedCard from '../../components/AnimatedCard';
+import AnimatedList from '../../components/AnimatedList';
+import {
+    createScreenEntranceAnimation,
+    createFadeAnimation,
+    createScaleAnimation,
+    createListItemAnimation,
+    ANIMATION_DURATIONS,
+} from '../../utils/animations';
 
 interface CalendarEventDisplay {
     id: string;
@@ -78,6 +87,23 @@ export default function CalendarScreen() {
     const { events: firebaseEvents, isLoading, error } = useCalendarData();
     const [selectedFilter, setSelectedFilter] = useState<'all' | 'events' | 'holidays' | 'reminders'>('all');
 
+    // Animation refs
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(50)).current;
+    const filterFadeAnim = useRef(new Animated.Value(0)).current;
+    const filterSlideAnim = useRef(new Animated.Value(-30)).current;
+
+    useEffect(() => {
+        // Start screen entrance animation
+        const entranceAnimation = Animated.sequence([
+            createScreenEntranceAnimation(fadeAnim, slideAnim),
+            Animated.delay(200),
+            createScreenEntranceAnimation(filterFadeAnim, filterSlideAnim),
+        ]);
+
+        entranceAnimation.start();
+    }, []);
+
     // Transform Firebase events to display format
     const calendarEvents = useMemo(() => {
         if (isLoading || error) {
@@ -137,14 +163,29 @@ export default function CalendarScreen() {
 
     return (
         <View style={styles.container}>
-            <ScreenHeader
-                title="School Calendar"
-                subtitle={`${filteredEvents.length} upcoming events`}
-                showBack={false}
-            />
+            <Animated.View
+                style={{
+                    opacity: fadeAnim,
+                    transform: [{ translateY: slideAnim }],
+                }}
+            >
+                <ScreenHeader
+                    title="School Calendar"
+                    subtitle={`${filteredEvents.length} upcoming events`}
+                    showBack={false}
+                />
+            </Animated.View>
 
-            {/* Filter Tabs */}
-            <View style={styles.filterContainer}>
+            {/* Animated Filter Tabs */}
+            <Animated.View
+                style={[
+                    styles.filterContainer,
+                    {
+                        opacity: filterFadeAnim,
+                        transform: [{ translateY: filterSlideAnim }],
+                    },
+                ]}
+            >
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
                     {filters.map(filter => (
                         <TouchableOpacity
@@ -163,80 +204,96 @@ export default function CalendarScreen() {
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
-            </View>
+            </Animated.View>
 
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-                <View style={styles.content}>
+                <Animated.View
+                    style={[
+                        styles.content,
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideAnim }],
+                        },
+                    ]}
+                >
                     {isLoading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color={Colors.primary} />
-                            <Text style={styles.loadingText}>Loading calendar events...</Text>
-                        </View>
+                        <AnimatedCard animationType="fade" delay={300}>
+                            <View style={styles.loadingContainer}>
+                                <ActivityIndicator size="large" color={Colors.primary} />
+                                <Text style={styles.loadingText}>Loading calendar events...</Text>
+                            </View>
+                        </AnimatedCard>
                     ) : error ? (
-                        <View style={styles.errorContainer}>
-                            <Ionicons name="alert-circle-outline" size={48} color={Colors.gradePoor} />
-                            <Text style={styles.errorTitle}>Unable to load events</Text>
-                            <Text style={styles.errorSubtitle}>Showing offline events. Check your connection and try again.</Text>
-                        </View>
+                        <AnimatedCard animationType="bounceIn" delay={300}>
+                            <View style={styles.errorContainer}>
+                                <Ionicons name="alert-circle-outline" size={48} color={Colors.gradePoor} />
+                                <Text style={styles.errorTitle}>Unable to load events</Text>
+                                <Text style={styles.errorSubtitle}>Showing offline events. Check your connection and try again.</Text>
+                            </View>
+                        </AnimatedCard>
                     ) : null}
 
-                    {filteredEvents.map(event => {
-                        const config = eventConfig[event.type];
-                        return (
-                            <TouchableOpacity key={event.id} style={styles.eventCard} activeOpacity={0.7}>
-                                <View style={styles.eventHeader}>
-                                    <View style={[styles.eventIcon, { backgroundColor: config.bg }]}>
-                                        <Ionicons name={config.icon} size={20} color={config.color} />
-                                    </View>
-                                    <View style={styles.eventInfo}>
-                                        <View style={styles.eventTitleRow}>
-                                            <Text style={styles.eventTitle}>{event.title}</Text>
-                                            {event.isToday && (
-                                                <View style={styles.todayBadge}>
-                                                    <Text style={styles.todayText}>Today</Text>
+                    <AnimatedList staggerDelay={100}>
+                        {filteredEvents.map(event => {
+                            const config = eventConfig[event.type];
+                            return (
+                                <TouchableOpacity key={event.id} style={styles.eventCard} activeOpacity={0.7}>
+                                    <View style={styles.eventHeader}>
+                                        <View style={[styles.eventIcon, { backgroundColor: config.bg }]}>
+                                            <Ionicons name={config.icon} size={20} color={config.color} />
+                                        </View>
+                                        <View style={styles.eventInfo}>
+                                            <View style={styles.eventTitleRow}>
+                                                <Text style={styles.eventTitle}>{event.title}</Text>
+                                                {event.isToday && (
+                                                    <View style={styles.todayBadge}>
+                                                        <Text style={styles.todayText}>Today</Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <View style={styles.eventMeta}>
+                                                <Text style={styles.eventDate}>{event.date}</Text>
+                                                {event.time && (
+                                                    <>
+                                                        <View style={styles.dot} />
+                                                        <Text style={styles.eventTime}>{event.time}</Text>
+                                                    </>
+                                                )}
+                                            </View>
+                                            <View style={styles.eventTypeContainer}>
+                                                <View style={[styles.eventTypeBadge, { backgroundColor: config.bg }]}>
+                                                    <Text style={[styles.eventTypeText, { color: config.color }]}>
+                                                        {config.label}
+                                                    </Text>
                                                 </View>
-                                            )}
-                                        </View>
-                                        <View style={styles.eventMeta}>
-                                            <Text style={styles.eventDate}>{event.date}</Text>
-                                            {event.time && (
-                                                <>
-                                                    <View style={styles.dot} />
-                                                    <Text style={styles.eventTime}>{event.time}</Text>
-                                                </>
-                                            )}
-                                        </View>
-                                        <View style={styles.eventTypeContainer}>
-                                            <View style={[styles.eventTypeBadge, { backgroundColor: config.bg }]}>
-                                                <Text style={[styles.eventTypeText, { color: config.color }]}>
-                                                    {config.label}
-                                                </Text>
                                             </View>
                                         </View>
+                                        <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
                                     </View>
-                                    <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
-                                </View>
 
-                                {event.description && (
-                                    <Text style={styles.eventDescription}>{event.description}</Text>
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
+                                    {event.description && (
+                                        <Text style={styles.eventDescription}>{event.description}</Text>
+                                    )}
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </AnimatedList>
 
                     {filteredEvents.length === 0 && (
-                        <View style={styles.emptyState}>
-                            <Ionicons name="calendar-outline" size={48} color={Colors.textTertiary} />
-                            <Text style={styles.emptyTitle}>No events found</Text>
-                            <Text style={styles.emptySubtitle}>
-                                {selectedFilter === 'all'
-                                    ? 'No upcoming events in the calendar'
-                                    : `No ${selectedFilter} found`
-                                }
-                            </Text>
-                        </View>
+                        <AnimatedCard animationType="scaleIn" delay={400}>
+                            <View style={styles.emptyState}>
+                                <Ionicons name="calendar-outline" size={48} color={Colors.textTertiary} />
+                                <Text style={styles.emptyTitle}>No events found</Text>
+                                <Text style={styles.emptySubtitle}>
+                                    {selectedFilter === 'all'
+                                        ? 'No upcoming events in the calendar'
+                                        : `No ${selectedFilter} found`
+                                    }
+                                </Text>
+                            </View>
+                        </AnimatedCard>
                     )}
-                </View>
+                </Animated.View>
             </ScrollView>
         </View>
     );

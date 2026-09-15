@@ -1,91 +1,144 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  Modal,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../theme/colors';
 import { mockAnnouncements, Announcement } from '../../data/mockData';
 import AnnouncementCard from '../../components/AnnouncementCard';
 import ScreenHeader from '../../components/ScreenHeader';
+import AnimatedModal from '../../components/AnimatedModal';
+import AnimatedList from '../../components/AnimatedList';
+import {
+  createScreenEntranceAnimation,
+  createFadeAnimation,
+  createScaleAnimation,
+  ANIMATION_DURATIONS,
+} from '../../utils/animations';
 
 export default function AnnouncementsScreen({ navigation }: any) {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [showModal, setShowModal] = useState(false);
+
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const headerScaleAnim = useRef(new Animated.Value(0.9)).current;
 
   const newCount = mockAnnouncements.filter(a => a.isNew).length;
 
+  useEffect(() => {
+    // Start screen entrance animation
+    const entranceAnimation = Animated.parallel([
+      createScreenEntranceAnimation(fadeAnim, slideAnim),
+      createScaleAnimation(headerScaleAnim, 1, ANIMATION_DURATIONS.entrance),
+    ]);
+
+    entranceAnimation.start();
+  }, []);
+
+  const handleAnnouncementPress = (announcement: Announcement) => {
+    setSelectedAnnouncement(announcement);
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setTimeout(() => {
+      setSelectedAnnouncement(null);
+    }, 300);
+  };
+
   return (
     <View style={styles.container}>
-      <ScreenHeader
-        title="Announcements"
-        subtitle={`${newCount} new updates`}
-        showBack={navigation?.canGoBack ? navigation.canGoBack() : false}
-      />
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <Animated.View
+        style={{
+          opacity: fadeAnim,
+          transform: [
+            { translateY: slideAnim },
+            { scale: headerScaleAnim },
+          ],
+        }}
       >
-        {mockAnnouncements.map(announcement => (
-          <AnnouncementCard
-            key={announcement.id}
-            title={announcement.title}
-            content={announcement.content}
-            date={announcement.date}
-            category={announcement.category}
-            isNew={announcement.isNew}
-            onPress={() => setSelectedAnnouncement(announcement)}
-          />
-        ))}
-      </ScrollView>
+        <ScreenHeader
+          title="Announcements"
+          subtitle={`${newCount} new updates`}
+          showBack={navigation?.canGoBack ? navigation.canGoBack() : false}
+        />
+      </Animated.View>
 
-      {/* Announcement Detail Modal */}
-      <Modal
-        visible={!!selectedAnnouncement}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedAnnouncement(null)}
+      <Animated.View
+        style={[
+          styles.contentContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View style={styles.categoryBadge}>
-                <Ionicons name="megaphone" size={14} color={Colors.primary} />
-                <Text style={styles.categoryText}>
-                  {selectedAnnouncement?.category.toUpperCase()}
-                </Text>
-              </View>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setSelectedAnnouncement(null)}
-                style={styles.closeBtn}
-              >
-                <Ionicons name="close" size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <AnimatedList staggerDelay={80}>
+            {mockAnnouncements.map((announcement, index) => (
+              <AnnouncementCard
+                key={announcement.id}
+                title={announcement.title}
+                content={announcement.content}
+                date={announcement.date}
+                category={announcement.category}
+                isNew={announcement.isNew}
+                onPress={() => handleAnnouncementPress(announcement)}
+              />
+            ))}
+          </AnimatedList>
+        </ScrollView>
+      </Animated.View>
 
-            <Text style={styles.modalTitle}>{selectedAnnouncement?.title}</Text>
-            <Text style={styles.modalDate}>{selectedAnnouncement?.date}</Text>
-
-            <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalContent}>{selectedAnnouncement?.content}</Text>
-            </ScrollView>
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.closeModalBtn}
-              onPress={() => setSelectedAnnouncement(null)}
-            >
-              <Text style={styles.closeModalBtnText}>Done</Text>
-            </TouchableOpacity>
+      {/* Enhanced Animated Modal */}
+      <AnimatedModal
+        visible={showModal}
+        onClose={handleCloseModal}
+        animationType="scale"
+      >
+        <View style={styles.modalHeader}>
+          <View style={styles.categoryBadge}>
+            <Ionicons name="megaphone" size={14} color={Colors.primary} />
+            <Text style={styles.categoryText}>
+              {selectedAnnouncement?.category.toUpperCase()}
+            </Text>
           </View>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleCloseModal}
+            style={styles.closeBtn}
+          >
+            <Ionicons name="close" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
         </View>
-      </Modal>
+
+        <Text style={styles.modalTitle}>{selectedAnnouncement?.title}</Text>
+        <Text style={styles.modalDate}>{selectedAnnouncement?.date}</Text>
+
+        <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
+          <Text style={styles.modalContent}>{selectedAnnouncement?.content}</Text>
+        </ScrollView>
+
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={styles.closeModalBtn}
+          onPress={handleCloseModal}
+        >
+          <Text style={styles.closeModalBtnText}>Done</Text>
+        </TouchableOpacity>
+      </AnimatedModal>
     </View>
   );
 }
@@ -95,6 +148,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  contentContainer: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
@@ -102,25 +158,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 100,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxHeight: '80%',
-    backgroundColor: Colors.white,
-    borderRadius: 28,
-    padding: 24,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',

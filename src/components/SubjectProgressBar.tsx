@@ -1,29 +1,69 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Colors } from '../theme/colors';
+import { createFadeAnimation, ANIMATION_DURATIONS } from '../utils/animations';
 
 interface SubjectProgressBarProps {
   subject: string;
   percentage: number;
   color: string;
   teacher?: string;
+  delay?: number;
 }
 
-export default function SubjectProgressBar({ subject, percentage, color, teacher }: SubjectProgressBarProps) {
+export default function SubjectProgressBar({
+  subject,
+  percentage,
+  color,
+  teacher,
+  delay = 0
+}: SubjectProgressBarProps) {
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const progressAnimation = Animated.timing(progressAnim, {
+      toValue: percentage,
+      duration: ANIMATION_DURATIONS.slow + delay,
+      delay,
+      useNativeDriver: false,
+    });
+
+    const fadeAnimation = createFadeAnimation(fadeAnim, 1, ANIMATION_DURATIONS.medium, delay);
+
+    Animated.parallel([progressAnimation, fadeAnimation]).start();
+  }, [percentage, delay]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <View style={styles.header}>
         <View style={styles.nameRow}>
           <View style={[styles.dot, { backgroundColor: color }]} />
           <Text style={styles.subject}>{subject}</Text>
         </View>
-        <Text style={[styles.percentage, { color }]}>{percentage}%</Text>
+        <Animated.Text style={[styles.percentage, { color }]}>
+          {Math.round(percentage)}%
+        </Animated.Text>
       </View>
       {teacher && <Text style={styles.teacher}>{teacher}</Text>}
       <View style={styles.trackOuter}>
-        <View style={[styles.trackInner, { width: `${percentage}%`, backgroundColor: color }]} />
+        <Animated.View
+          style={[
+            styles.trackInner,
+            {
+              backgroundColor: color,
+              transform: [{ scaleX: progressWidth }]
+            }
+          ]}
+        />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -71,5 +111,7 @@ const styles = StyleSheet.create({
   trackInner: {
     height: 6,
     borderRadius: 3,
+    width: '100%',
+    transformOrigin: 'left',
   },
 });

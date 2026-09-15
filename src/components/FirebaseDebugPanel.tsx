@@ -6,6 +6,7 @@ import { auth, db } from '../services/firebase';
 import { collection, addDoc, getDocs, doc, setDoc } from 'firebase/firestore';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { seedService } from '../services/seedService';
+import { offlineService } from '../services/offlineService';
 
 const SCHOOL_ID = 'oakridge-academy';
 
@@ -16,45 +17,45 @@ const demoUserSpecs: {
     role: 'parent' | 'teacher' | 'admin';
     profile: () => Record<string, any>;
 }[] = [
-    {
-        email: 'parent@demo.com',
-        password: 'demo123',
-        displayName: 'Nomsa Mbeki',
-        role: 'parent',
-        profile: () => ({
-            parentProfile: {
-                childrenIds: ['student-1', 'student-2'],
-                phone: '+27 82 123 4567',
-                emergencyContact: '+27 83 987 6543',
-            },
-        }),
-    },
-    {
-        email: 'teacher@demo.com',
-        password: 'demo123',
-        displayName: 'Sarah Johnson',
-        role: 'teacher',
-        profile: () => ({
-            teacherProfile: {
-                subjects: ['mathematics'],
-                classIds: ['class-8a'],
-                employeeId: 'T001',
-            },
-        }),
-    },
-    {
-        email: 'admin@demo.com',
-        password: 'demo123',
-        displayName: 'Principal Mokoena',
-        role: 'admin',
-        profile: () => ({
-            adminProfile: {
-                permissions: ['full_access'],
-                managedSchoolIds: [SCHOOL_ID],
-            },
-        }),
-    },
-];
+        {
+            email: 'parent@demo.com',
+            password: 'demo123',
+            displayName: 'Nomsa Mbeki',
+            role: 'parent',
+            profile: () => ({
+                parentProfile: {
+                    childrenIds: ['student-1', 'student-2'],
+                    phone: '+27 82 123 4567',
+                    emergencyContact: '+27 83 987 6543',
+                },
+            }),
+        },
+        {
+            email: 'teacher@demo.com',
+            password: 'demo123',
+            displayName: 'Sarah Johnson',
+            role: 'teacher',
+            profile: () => ({
+                teacherProfile: {
+                    subjects: ['mathematics'],
+                    classIds: ['class-8a'],
+                    employeeId: 'T001',
+                },
+            }),
+        },
+        {
+            email: 'admin@demo.com',
+            password: 'demo123',
+            displayName: 'Principal Mokoena',
+            role: 'admin',
+            profile: () => ({
+                adminProfile: {
+                    permissions: ['full_access'],
+                    managedSchoolIds: [SCHOOL_ID],
+                },
+            }),
+        },
+    ];
 
 export default function FirebaseDebugPanel() {
     const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
@@ -83,9 +84,22 @@ export default function FirebaseDebugPanel() {
 
             setConnectionStatus('connected');
             addTestResult('🎉 All Firebase tests passed!');
+
+            // Disable offline mode if tests pass
+            if (offlineService.isOffline()) {
+                offlineService.setOfflineMode(false);
+                addTestResult('✅ Offline mode disabled - Firebase is available');
+            }
         } catch (error: any) {
             setConnectionStatus('error');
             addTestResult(`❌ Firebase Error: ${error.message}`);
+
+            if (error.code === 'permission-denied' ||
+                error.code === 'unavailable' ||
+                error.message?.includes('network-request-failed')) {
+                addTestResult('⚠️ Firebase services not enabled - switching to offline mode');
+                offlineService.setOfflineMode(true);
+            }
         }
     };
 

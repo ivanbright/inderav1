@@ -15,6 +15,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from './firebase';
+import { offlineService } from './offlineService';
 
 export interface UserProfile {
     uid: string;
@@ -71,12 +72,30 @@ class AuthService {
     }
 
     async signIn(email: string, password: string): Promise<{ user: User; profile: UserProfile }> {
+        // Check if we should use offline mode
+        if (offlineService.isOffline()) {
+            console.log('Using offline mode for sign-in');
+            const result = await offlineService.mockSignIn(email, password);
+            this.currentUserProfile = result.profile;
+            return result as { user: User; profile: UserProfile };
+        }
+
         let user: User;
         try {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             user = userCredential.user;
         } catch (error: any) {
             console.error('Sign-in failed:', error.code, error.message);
+
+            // If network error, suggest offline mode
+            if (error.code === 'auth/network-request-failed' ||
+                error.code === 'auth/operation-not-allowed') {
+                offlineService.setOfflineMode(true);
+                const result = await offlineService.mockSignIn(email, password);
+                this.currentUserProfile = result.profile;
+                return result as { user: User; profile: UserProfile };
+            }
+
             throw new Error(this.getAuthErrorMessage(error.code));
         }
 
@@ -250,6 +269,12 @@ class AuthService {
         };
     }
 
+    async getPendingUsers(): Promise<{ uid: string; email: string | null; role: string; name: string | null; submittedAt: string | null }[]> {
+        const callPendingUsers = httpsCallable<Record<string, never>, { users: { uid: string; email: string | null; role: string; name: string | null; submittedAt: string | null }[] }>(functions, 'getPendingUsers');
+        const result = await callPendingUsers({});
+        return result.data.users || [];
+    }
+
     async refreshUserProfile(): Promise<void> {
         if (!this.currentUser) return;
         await this.loadUserProfile(this.currentUser.uid);
@@ -307,7 +332,6 @@ class AuthService {
                 lastActive: now,
                 ...demo.build(),
             }, { merge: true });
-            console.log(`Repaired demo profile for ${user.email}`);
         } catch (error) {
             console.warn('Could not repair demo profile:', error);
         }
@@ -315,6 +339,13 @@ class AuthService {
 
     async signOut(): Promise<void> {
         try {
+            if (offlineService.isOffline()) {
+                await offlineService.mockSignOut();
+                this.currentUser = null;
+                this.currentUserProfile = null;
+                return;
+            }
+
             await signOut(auth);
             this.currentUser = null;
             this.currentUserProfile = null;
@@ -391,7 +422,7 @@ class AuthService {
         switch (errorCode) {
             case 'auth/user-not-found':
             case 'auth/invalid-credential':
-                return 'No account found for this email/password. Check your credentials or create a demo user first.';
+                return 'No account found for this email/password. Please check your credentials or use the demo credentials above.';
             case 'auth/wrong-password':
                 return 'Incorrect password.';
             case 'auth/invalid-email':
@@ -401,15 +432,15 @@ class AuthService {
             case 'auth/too-many-requests':
                 return 'Too many failed attempts. Please try again later.';
             case 'auth/network-request-failed':
-                return 'Network error. Please check your connection.';
+                return 'Firebase Authentication is not enabled. Please enable Authentication in Firebase Console or use offline mode.';
             case 'auth/invalid-api-key':
-                return 'Firebase API key is invalid. Check your Firebase configuration.';
+                return 'Firebase API key is invalid. Please check your Firebase configuration.';
             case 'auth/operation-not-allowed':
-                return 'Email/password sign-in is not enabled in the Firebase Auth console.';
+                return 'Email/password sign-in is not enabled in the Firebase Console. Please enable it first.';
             case 'auth/unauthorized-domain':
                 return 'This domain is not authorized for Firebase Authentication.';
             default:
-                return `Authentication failed (${errorCode || 'unknown'}). Please try again.`;
+                return `Authentication failed (${errorCode || 'unknown'}). Please enable Firebase Authentication in the console or check your network connection.`;
         }
     }
 

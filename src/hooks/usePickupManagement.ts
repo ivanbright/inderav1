@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { databaseService } from '../services/databaseService';
+import { offlineService } from '../services/offlineService';
 import { Student, AuthorizedPickup } from '../services/models';
 import { useApp } from '../contexts/AppContext';
 
@@ -32,6 +33,14 @@ export const usePickupManagement = (studentId: string): UsePickupManagementResul
         try {
             setIsLoading(true);
             setError(null);
+
+            // Handle offline mode
+            if (offlineService.isOffline()) {
+                const mockPickups = offlineService.getMockPickupPersons();
+                setAuthorizedPickups(mockPickups);
+                setIsLoading(false);
+                return;
+            }
 
             // Get the student data to access authorized pickups
             const student = await databaseService.get<Student>('students', studentId);
@@ -73,6 +82,23 @@ export const usePickupManagement = (studentId: string): UsePickupManagementResul
 
         try {
             setError(null);
+
+            // Handle offline mode
+            if (offlineService.isOffline()) {
+                const newPickup: AuthorizedPickup = {
+                    id: `pickup_${Date.now()}`,
+                    name: personData.name,
+                    relationship: personData.relationship,
+                    phone: personData.phone,
+                    idNumber: personData.idNumber,
+                    isActive: true,
+                    addedAt: new Date().toISOString(),
+                };
+
+                await offlineService.mockCreateOperation('pickups', newPickup);
+                setAuthorizedPickups(prev => [...prev, newPickup]);
+                return;
+            }
 
             // Get the student to find the parent
             const student = await databaseService.get<Student>('students', studentId);

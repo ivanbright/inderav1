@@ -8,24 +8,47 @@ class InitializationService {
         if (this.initialized) return;
 
         try {
-            console.log('Initializing Indera app...');
+            // Check if Firebase services are available
+            const firebaseAvailable = await this.checkFirebaseAvailability();
 
-            // Check if demo data already exists by trying to sign in
-            const hasDemoData = await this.checkDemoDataExists();
+            if (firebaseAvailable) {
+                // Check if demo data already exists by trying to sign in
+                const hasDemoData = await this.checkDemoDataExists();
 
-            if (!hasDemoData) {
-                console.log('No demo data found, seeding initial data...');
-                await seedService.seedDemoData();
-                console.log('Demo data seeded successfully');
-            } else {
-                console.log('Demo data already exists, skipping seeding');
+                if (!hasDemoData) {
+                    await seedService.seedDemoData();
+                }
             }
 
             this.initialized = true;
-            console.log('App initialization complete');
         } catch (error) {
             console.error('App initialization failed:', error);
             // Don't throw error to prevent app crash - fallback to mock data
+            this.initialized = true;
+        }
+    }
+
+    private async checkFirebaseAvailability(): Promise<boolean> {
+        try {
+            // Test basic Firebase connectivity
+            const { db } = await import('./firebase');
+            const { doc, getDoc } = await import('firebase/firestore');
+
+            // Try to read a non-existent document (should fail gracefully if Firebase is configured)
+            const testDoc = doc(db, 'test', 'connectivity');
+            await getDoc(testDoc);
+
+            return true;
+        } catch (error: any) {
+            // Check for specific Firebase errors that indicate misconfiguration
+            if (error?.code === 'permission-denied' ||
+                error?.code === 'unavailable' ||
+                error?.message?.includes('network-request-failed')) {
+                return false;
+            }
+
+            // Other errors might still mean Firebase is available but needs setup
+            return false;
         }
     }
 
@@ -50,8 +73,6 @@ class InitializationService {
 
     async resetDemoData(): Promise<void> {
         try {
-            console.log('Resetting demo data...');
-
             // Sign out current user if any
             if (authService.getCurrentUser()) {
                 await authService.signOut();
@@ -59,8 +80,6 @@ class InitializationService {
 
             // Re-seed data
             await seedService.seedDemoData();
-
-            console.log('Demo data reset successfully');
         } catch (error) {
             console.error('Failed to reset demo data:', error);
             throw error;
