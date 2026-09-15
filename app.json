@@ -18,6 +18,16 @@
       },
       "predictiveBackGestureEnabled": false
     },
+    "plugins": [
+      [
+        "expo-navigation-bar",
+        {
+          "hidden": true,
+          "style": "light"
+        }
+      ],
+      "expo-web-browser"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

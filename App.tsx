@@ -1,20 +1,24 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
+import { NavigationBar } from 'expo-navigation-bar';
+import AppNavigator from './src/navigation/AppNavigator';
+import { AppProvider } from './src/contexts/AppContext';
+
+// Hide the Android system 3-button navigation bar so the app's
+// own bottom tab bar is used (swipe up from the bottom to reveal it).
+if (Platform.OS === 'android') {
+  NavigationBar.setHidden(true);
+}
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider>
+      <AppProvider>
+        <NavigationContainer>
+          <AppNavigator />
+        </NavigationContainer>
+      </AppProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
